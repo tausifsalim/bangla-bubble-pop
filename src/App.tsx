@@ -240,15 +240,29 @@ const App: React.FC = () => {
         {bubbles.map(bubble => (
           <BubbleWrapper
             key={bubble.id}
-            initial={{ y: window.innerHeight, scale: 1, opacity: 1, rotate: 0 }}
+            initial={{
+              y: window.innerHeight,
+              scale: 1,
+              opacity: 1,
+              rotate: 0
+            }}
             animate={bubble.popping ? {
               scale: [1, 1.2, 0.7, 0.5],
               opacity: [1, 1, 0.7, 0],
-              y: [bubble.position.y, bubble.position.y - 40, bubble.position.y - 80, bubble.position.y - 120],
+              y: bubble.position
+                ? [
+                    bubble.position.y,
+                    bubble.position.y - 40,
+                    bubble.position.y - 80,
+                    bubble.position.y - 120
+                  ]
+                : [0, -40, -80, -120],
               transition: { duration: 0.4 }
             } : {
-              y: bubble.matched ? window.innerHeight : bubble.position.y,
-              x: bubble.position.x,
+              y: bubble.matched
+                ? window.innerHeight
+                : (bubble.position?.y ?? 0),
+              x: bubble.position?.x ?? 0,
               scale: 1,
               opacity: 1,
               rotate: 0
