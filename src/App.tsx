@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // Complete Bangla alphabet data with corresponding English sounds
 const allAlphabetData = [
@@ -40,12 +40,20 @@ const App: React.FC = () => {
   const [level, setLevel] = useState(1);
   const [currentLevelLetters, setCurrentLevelLetters] = useState<typeof allAlphabetData>([]);
   const [usedLetters, setUsedLetters] = useState<Set<string>>(new Set());
-  const [popSound] = useState(() => new Audio('/sounds/pop.mp3'));
   const [showLevelEnd, setShowLevelEnd] = useState(false);
   const [allMatched, setAllMatched] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const popSound = useRef<HTMLAudioElement | null>(null);
 
-  // --- Level/Score Logic ---
+  // Helper to shuffle an array
+  const shuffleArray = (array: any[]) => {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  };
+
+  // Generate bubble positions
   const generateBubblePositions = (count: number, type: 'bangla' | 'sound') => {
     const positions: { x: number; y: number }[] = [];
     const maxAttempts = 1000;
@@ -69,23 +77,25 @@ const App: React.FC = () => {
     return positions;
   };
 
-  const generateNewLevel = useCallback(() => {
-    const availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
+  // Generate a new level (memoized, does not depend on usedLetters)
+  const generateNewLevel = useCallback((resetUsedLetters = false) => {
+    let availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
     let selectedLetters;
-    if (availableLetters.length < LETTERS_PER_LEVEL) {
-      setUsedLetters(new Set());
+    let newUsedLetters = new Set(usedLetters);
+
+    if (availableLetters.length < LETTERS_PER_LEVEL || resetUsedLetters) {
+      newUsedLetters = new Set();
       const letters = [...allAlphabetData];
       shuffleArray(letters);
       selectedLetters = letters.slice(0, LETTERS_PER_LEVEL);
-      setCurrentLevelLetters(selectedLetters);
     } else {
       shuffleArray(availableLetters);
       selectedLetters = availableLetters.slice(0, LETTERS_PER_LEVEL);
-      setCurrentLevelLetters(selectedLetters);
-      const newUsedLetters = new Set(usedLetters);
       selectedLetters.forEach(letter => newUsedLetters.add(letter.bangla));
-      setUsedLetters(newUsedLetters);
     }
+
+    setCurrentLevelLetters(selectedLetters);
+
     // Generate bubble positions
     const banglaPositions = generateBubblePositions(LETTERS_PER_LEVEL, 'bangla');
     const soundPositions = generateBubblePositions(LETTERS_PER_LEVEL, 'sound');
@@ -116,32 +126,36 @@ const App: React.FC = () => {
     setTotalAttempts(0);
     setAllMatched(false);
     setShowLevelEnd(false);
-  }, [usedLetters]);
+    setUsedLetters(newUsedLetters);
+  // eslint-disable-next-line
+  }, [level]);
 
   // Helper to start the game and initialize level 1
   const handleStartGame = useCallback(() => {
     setGameStarted(true);
     setLevel(1);
-    setUsedLetters(new Set());
-    setTimeout(() => {
-      generateNewLevel();
-    }, 0);
+    generateNewLevel(true); // Reset used letters
   }, [generateNewLevel]);
 
   useEffect(() => {
-    popSound.preload = 'auto';
-  }, [popSound]);
+    popSound.current = new Audio('/sounds/pop.mp3');
+    if (popSound.current) {
+      popSound.current.preload = 'auto';
+    }
+  }, []);
 
-  // --- 2. Play pop sound and 4. Haptic feedback ---
+  // Play pop sound and haptic feedback
   const playPopSoundAndHaptic = useCallback(() => {
-    popSound.currentTime = 0;
-    popSound.play().catch(error => console.log('Error playing sound:', error));
+    if (popSound.current) {
+      popSound.current.currentTime = 0;
+      popSound.current.play().catch(error => console.log('Error playing sound:', error));
+    }
     if (navigator.vibrate) {
       navigator.vibrate(50);
     }
-  }, [popSound]);
+  }, []);
 
-  // --- 3. Realistic Pop Animation ---
+  // Realistic Pop Animation
   const handleBubbleClick = (bubble: Bubble) => {
     if (bubble.matched || allMatched) return;
     if (!selectedBubble) {
@@ -184,12 +198,13 @@ const App: React.FC = () => {
     return !!pair;
   };
 
+  // Only generate a new level when level or gameStarted changes
   useEffect(() => {
     if (level <= MAX_LEVEL && gameStarted) {
       generateNewLevel();
     }
     // eslint-disable-next-line
-  }, [level, generateNewLevel, gameStarted]);
+  }, [level, gameStarted]);
 
   useEffect(() => {
     if (bubbles.length > 0 && bubbles.every(b => b.matched)) {
@@ -197,13 +212,6 @@ const App: React.FC = () => {
       setTimeout(() => setShowLevelEnd(true), 700);
     }
   }, [bubbles]);
-
-  const shuffleArray = (array: any[]) => {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-  };
 
   const handleNextLevel = () => {
     setLevel(prev => prev + 1);
