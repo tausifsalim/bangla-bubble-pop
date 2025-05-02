@@ -173,7 +173,7 @@ const App: React.FC = () => {
             initial={{ y: window.innerHeight }}
             animate={{
               y: bubble.matched ? window.innerHeight : -100,
-              x: bubble.position.x + Math.sin(Date.now() / 1000) * 20
+              x: bubble.position.x
             }}
             exit={{ y: window.innerHeight }}
             transition={{
