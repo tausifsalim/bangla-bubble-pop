@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
 
 // Complete Bangla alphabet data with corresponding English sounds
 const allAlphabetData = [
@@ -26,7 +26,6 @@ interface Bubble {
 
 const LETTERS_PER_LEVEL = 10;
 const PASSING_SCORE_PERCENTAGE = 70;
-const MAX_LEVEL = 10;
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -37,11 +36,11 @@ const App: React.FC = () => {
   const [currentLevelLetters, setCurrentLevelLetters] = useState<typeof allAlphabetData>([]);
   const [usedLetters, setUsedLetters] = useState<Set<string>>(new Set());
   const [popSound] = useState(() => new Audio('/sounds/pop.mp3'));
-  const [allMatched, setAllMatched] = useState(false);
-  const [gameComplete, setGameComplete] = useState(false);
 
   // Initialize pop sound
-  useEffect(() => { popSound.preload = 'auto'; }, [popSound]);
+  useEffect(() => {
+    popSound.preload = 'auto';
+  }, [popSound]);
 
   // Play pop sound function
   const playPopSound = useCallback(() => {
@@ -49,8 +48,13 @@ const App: React.FC = () => {
     popSound.play().catch(error => console.log('Error playing sound:', error));
   }, [popSound]);
 
-  // Generate new level
-  const generateNewLevel = useCallback(() => {
+  // Initialize level
+  useEffect(() => {
+    generateNewLevel();
+    // eslint-disable-next-line
+  }, [level]);
+
+  const generateNewLevel = () => {
     // Filter out already used letters when possible
     const availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
     let selectedLetters;
@@ -68,7 +72,7 @@ const App: React.FC = () => {
       selectedLetters.forEach(letter => newUsedLetters.add(letter.bangla));
       setUsedLetters(newUsedLetters);
     }
-    // Generate bubbles
+    // Generate bubbles immediately with the selected letters
     const initialBubbles: Bubble[] = [];
     selectedLetters.forEach((item, index) => {
       const baseDelay = index * 2;
@@ -90,24 +94,8 @@ const App: React.FC = () => {
       });
     });
     setBubbles(initialBubbles);
-    setAllMatched(false);
     setSelectedBubble(null);
-  }, [usedLetters]);
-
-  // On level change, generate new level
-  useEffect(() => {
-    if (level <= MAX_LEVEL) {
-      generateNewLevel();
-    }
-  }, [level, generateNewLevel]);
-
-  // Check if all bubbles are matched
-  useEffect(() => {
-    if (bubbles.length > 0 && bubbles.every(b => b.matched)) {
-      setAllMatched(true);
-      if (level === MAX_LEVEL) setGameComplete(true);
-    }
-  }, [bubbles, level]);
+  };
 
   const shuffleArray = (array: any[]) => {
     for (let i = array.length - 1; i > 0; i--) {
@@ -117,7 +105,7 @@ const App: React.FC = () => {
   };
 
   const handleBubbleClick = (bubble: Bubble) => {
-    if (bubble.matched || allMatched) return;
+    if (bubble.matched) return;
     if (!selectedBubble) {
       setSelectedBubble(bubble);
     } else {
@@ -133,6 +121,19 @@ const App: React.FC = () => {
               : b
           )
         );
+        // Check if all current bubbles are matched
+        setTimeout(() => {
+          const allMatched = bubbles.every(b =>
+            b.matched || b.id === bubble.id || b.id === selectedBubble.id
+          );
+          if (allMatched) {
+            if (level < 10) {
+              setLevel(prev => prev + 1);
+            } else {
+              alert(`Game Complete!\nFinal Score: ${((score + 1) / totalAttempts * 100).toFixed(1)}%\n${((score + 1) / totalAttempts * 100) >= PASSING_SCORE_PERCENTAGE ? 'Passed! 🎉' : 'Try again to achieve 70% or higher'}`);
+            }
+          }
+        }, 500);
       }
       setSelectedBubble(null);
     }
@@ -148,12 +149,6 @@ const App: React.FC = () => {
     return !!pair;
   };
 
-  const handleNextLevel = () => {
-    if (level < MAX_LEVEL) {
-      setLevel(prev => prev + 1);
-    }
-  };
-
   const currentScore = totalAttempts > 0
     ? ((score / totalAttempts) * 100).toFixed(1)
     : '100';
@@ -161,7 +156,7 @@ const App: React.FC = () => {
   return (
     <GameContainer>
       <ScoreBoard>
-        <div>Level: {level}/{MAX_LEVEL}</div>
+        <div>Level: {level}/10</div>
         <div>Score: {score}</div>
         <div>Accuracy: {currentScore}%</div>
       </ScoreBoard>
@@ -191,18 +186,6 @@ const App: React.FC = () => {
           </BubbleWrapper>
         ))}
       </AnimatePresence>
-      {allMatched && !gameComplete && (
-        <NextLevelButton onClick={handleNextLevel}>
-          Next Level
-        </NextLevelButton>
-      )}
-      {gameComplete && (
-        <GameComplete>
-          <h2>Game Complete!</h2>
-          <p>Final Score: {currentScore}%</p>
-          <p>{parseFloat(currentScore) >= PASSING_SCORE_PERCENTAGE ? 'Passed! 🎉' : 'Try again to achieve 70% or higher'}</p>
-        </GameComplete>
-      )}
     </GameContainer>
   );
 };
@@ -253,39 +236,6 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
   cursor: pointer;
   z-index: 2;
   user-select: none;
-`;
-
-const NextLevelButton = styled.button`
-  position: fixed;
-  left: 50%;
-  bottom: 120px;
-  transform: translateX(-50%);
-  padding: 16px 32px;
-  font-size: 1.5rem;
-  background: #2196f3;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  z-index: 20;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  transition: background 0.2s;
-  &:hover {
-    background: #1769aa;
-  }
-`;
-
-const GameComplete = styled.div`
-  position: fixed;
-  left: 50%;
-  top: 30%;
-  transform: translate(-50%, -30%);
-  background: #fff;
-  padding: 32px 48px;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-  text-align: center;
-  z-index: 30;
 `;
 
 export default App;
