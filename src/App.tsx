@@ -20,9 +20,11 @@ interface Bubble {
   type: 'bangla' | 'sound';
   content: string;
   matched: boolean;
+  missed: boolean;
   position: { x: number; y: number; };
   startDelay: number;
   popping?: boolean;
+  falling?: boolean;
 }
 
 const LETTERS_PER_LEVEL = 10;
@@ -30,11 +32,12 @@ const PASSING_SCORE_PERCENTAGE = 70;
 const MAX_LEVEL = 10;
 const BUBBLE_RADIUS = 40; // px
 const BUBBLE_DIAM = BUBBLE_RADIUS * 2;
-const BUBBLE_RISE_DURATION = 27; // seconds
+const BUBBLE_RISE_DURATION = 15; // seconds for bubble to rise
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [score, setScore] = useState(0);
+  const [missed, setMissed] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [selectedBubble, setSelectedBubble] = useState<Bubble | null>(null);
   const [level, setLevel] = useState(1);
@@ -53,25 +56,23 @@ const App: React.FC = () => {
     }
   };
 
-  // Generate bubble positions
-  const generateBubblePositions = (count: number, type: 'bangla' | 'sound') => {
+  // Generate bubble positions with no overlap
+  const generateBubblePositions = (count: number) => {
     const positions: { x: number; y: number }[] = [];
     const maxAttempts = 2000;
     const width = window.innerWidth;
     const height = window.innerHeight - 120;
-    const xMin = type === 'bangla' ? width / 2 + 40 : 40;
-    const xMax = type === 'bangla' ? width - 120 : width / 2 - 120;
     for (let i = 0; i < count; i++) {
       let placed = false;
       let attempts = 0;
       while (!placed && attempts < maxAttempts) {
-        const x = xMin + Math.random() * (xMax - xMin);
+        const x = 40 + Math.random() * (width - 120);
         const y = height - 100 - Math.random() * (height / 2 - 100);
         const tooClose = positions.some(pos => {
           const dx = pos.x - x;
           const dy = pos.y - y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          return dist < BUBBLE_DIAM; // No overlap allowed
+          return dist < BUBBLE_DIAM;
         });
         if (!tooClose) {
           positions.push({ x, y });
@@ -79,10 +80,9 @@ const App: React.FC = () => {
         }
         attempts++;
       }
-      // If not placed after maxAttempts, just place it (may overlap)
       if (!placed) {
         positions.push({
-          x: xMin + Math.random() * (xMax - xMin),
+          x: 40 + Math.random() * (width - 120),
           y: height - 100 - Math.random() * (height / 2 - 100)
         });
       }
@@ -90,7 +90,7 @@ const App: React.FC = () => {
     return positions;
   };
 
-  // Generate a new level (memoized, does not depend on usedLetters)
+  // Generate a new level
   const generateNewLevel = useCallback((resetUsedLetters = false) => {
     let availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
     let selectedLetters;
@@ -109,45 +109,45 @@ const App: React.FC = () => {
 
     setCurrentLevelLetters(selectedLetters);
 
-    // Generate bubble positions
-    const banglaPositions = generateBubblePositions(LETTERS_PER_LEVEL, 'bangla');
-    const soundPositions = generateBubblePositions(LETTERS_PER_LEVEL, 'sound');
-    // Generate bubbles
-    const initialBubbles: Bubble[] = [];
+    // Generate bubble positions and randomize order
+    const positions = generateBubblePositions(LETTERS_PER_LEVEL * 2);
+    const bubbleData: Bubble[] = [];
     selectedLetters.forEach((item, index) => {
-      const baseDelay = index * 2;
-      initialBubbles.push({
+      bubbleData.push({
         id: index * 2,
         type: 'bangla',
         content: item.bangla,
         matched: false,
-        position: banglaPositions[index],
-        startDelay: baseDelay,
+        missed: false,
+        position: positions[index * 2],
+        startDelay: Math.random() * 2,
       });
-      initialBubbles.push({
+      bubbleData.push({
         id: index * 2 + 1,
         type: 'sound',
         content: item.sound,
         matched: false,
-        position: soundPositions[index],
-        startDelay: baseDelay + 1,
+        missed: false,
+        position: positions[index * 2 + 1],
+        startDelay: Math.random() * 2,
       });
     });
-    setBubbles(initialBubbles);
+    shuffleArray(bubbleData);
+    setBubbles(bubbleData);
     setSelectedBubble(null);
     setScore(0);
+    setMissed(0);
     setTotalAttempts(0);
     setAllMatched(false);
     setShowLevelEnd(false);
     setUsedLetters(newUsedLetters);
-  // eslint-disable-next-line
-  }, [level]);
+  }, [usedLetters]);
 
-  // Helper to start the game and initialize level 1
+  // Start game
   const handleStartGame = useCallback(() => {
     setGameStarted(true);
     setLevel(1);
-    generateNewLevel(true); // Reset used letters
+    generateNewLevel(true);
   }, [generateNewLevel]);
 
   useEffect(() => {
@@ -168,9 +168,9 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Realistic Pop Animation
+  // Handle bubble click for matching
   const handleBubbleClick = (bubble: Bubble) => {
-    if (bubble.matched || allMatched) return;
+    if (bubble.matched || bubble.missed || allMatched) return;
     if (!selectedBubble) {
       setSelectedBubble(bubble);
     } else {
@@ -191,7 +191,7 @@ const App: React.FC = () => {
           setBubbles(prev =>
             prev.map(b =>
               b.id === bubble.id || b.id === selectedBubble.id
-                ? { ...b, matched: true, popping: false }
+                ? { ...b, matched: true, popping: false, falling: true }
                 : b
             )
           );
@@ -201,6 +201,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Check if two bubbles are a match
   const checkMatch = (bubble1: Bubble, bubble2: Bubble) => {
     if (bubble1.type === bubble2.type) return false;
     const pair = currentLevelLetters.find(
@@ -216,15 +217,42 @@ const App: React.FC = () => {
     if (level <= MAX_LEVEL && gameStarted) {
       generateNewLevel();
     }
-    // eslint-disable-next-line
-  }, [level, gameStarted]);
+  }, [level, gameStarted, generateNewLevel]);
 
+  // When all bubbles are matched or missed, show level end
   useEffect(() => {
-    if (bubbles.length > 0 && bubbles.every(b => b.matched)) {
+    if (
+      bubbles.length > 0 &&
+      bubbles.every(b => b.matched || b.missed)
+    ) {
       setAllMatched(true);
       setTimeout(() => setShowLevelEnd(true), 700);
     }
   }, [bubbles]);
+
+  // Handle bubbles rising and missing
+  const handleBubbleRiseComplete = (bubbleId: number) => {
+    setBubbles(prev =>
+      prev.map(b =>
+        b.id === bubbleId && !b.matched
+          ? { ...b, missed: true }
+          : b
+      )
+    );
+    setMissed(prev => prev + 1);
+    setTotalAttempts(prev => prev + 1);
+  };
+
+  // Handle falling animation complete (optional: remove bubble)
+  const handleBubbleFallComplete = (bubbleId: number) => {
+    setBubbles(prev =>
+      prev.map(b =>
+        b.id === bubbleId
+          ? { ...b, falling: false }
+          : b
+      )
+    );
+  };
 
   const handleNextLevel = () => {
     setLevel(prev => prev + 1);
@@ -254,42 +282,84 @@ const App: React.FC = () => {
       <ScoreBoard>
         <div>Level: {level}/{MAX_LEVEL}</div>
         <div>Score: {score}</div>
+        <div>Missed: {missed}</div>
         <div>Accuracy: {currentScore}%</div>
       </ScoreBoard>
       <GrassGround />
       <AnimatePresence>
-        {bubbles.map(bubble => (
-          <BubbleWrapper
-            key={bubble.id}
-            initial={{
-              y: window.innerHeight,
-              scale: 1,
-              opacity: 1,
-              rotate: 0
-            }}
-            animate={{
-              y: -100, // Move above the top of the screen
-              x: bubble.position?.x ?? 0,
-              scale: 1,
-              opacity: bubble.matched ? 0.5 : 1,
-              rotate: 0
-            }}
-            transition={{
-              y: {
-                duration: BUBBLE_RISE_DURATION,
-                ease: 'linear',
-                delay: bubble.startDelay,
-              }
-            }}
-            onClick={() => handleBubbleClick(bubble)}
-            $isSelected={selectedBubble?.id === bubble.id}
-            $isMatched={bubble.matched}
-          >
-            <BubbleInner popping={bubble.popping}>
-              {bubble.content}
-            </BubbleInner>
-          </BubbleWrapper>
-        ))}
+        {bubbles.map(bubble => {
+          // Rising animation for unmatched/unmissed bubbles
+          if (!bubble.matched && !bubble.missed) {
+            return (
+              <BubbleWrapper
+                key={bubble.id}
+                initial={{
+                  y: window.innerHeight,
+                  x: bubble.position?.x ?? 0,
+                  scale: 1,
+                  opacity: 1,
+                  rotate: 0
+                }}
+                animate={{
+                  y: -100,
+                  x: bubble.position?.x ?? 0,
+                  scale: 1,
+                  opacity: 1,
+                  rotate: 0
+                }}
+                transition={{
+                  y: {
+                    duration: BUBBLE_RISE_DURATION,
+                    ease: 'linear',
+                    delay: bubble.startDelay,
+                  }
+                }}
+                onAnimationComplete={() => handleBubbleRiseComplete(bubble.id)}
+                onClick={() => handleBubbleClick(bubble)}
+                $isSelected={selectedBubble?.id === bubble.id}
+                $isMatched={bubble.matched}
+              >
+                <BubbleInner>
+                  {bubble.content}
+                </BubbleInner>
+              </BubbleWrapper>
+            );
+          }
+          // Pop and fall animation for matched bubbles
+          if (bubble.matched && bubble.falling) {
+            return (
+              <BubbleWrapper
+                key={bubble.id}
+                initial={{
+                  y: bubble.position?.y ?? 0,
+                  x: bubble.position?.x ?? 0,
+                  scale: 1.2,
+                  opacity: 1,
+                  rotate: 0
+                }}
+                animate={{
+                  y: window.innerHeight - 120,
+                  x: bubble.position?.x ?? 0,
+                  scale: 1,
+                  opacity: 1,
+                  rotate: 0
+                }}
+                transition={{
+                  y: { duration: 1, ease: 'easeIn' }
+                }}
+                onAnimationComplete={() => handleBubbleFallComplete(bubble.id)}
+                $isSelected={false}
+                $isMatched={true}
+              >
+                <BubbleInner popping>
+                  {bubble.content}
+                </BubbleInner>
+              </BubbleWrapper>
+            );
+          }
+          // Hide missed or already fallen bubbles
+          return null;
+        })}
       </AnimatePresence>
       {showLevelEnd && (
         <LevelEndOverlay>
@@ -303,6 +373,8 @@ const App: React.FC = () => {
     </GameContainer>
   );
 };
+
+// --- Styled Components ---
 
 const StartScreen = styled.div`
   width: 100vw;
@@ -382,8 +454,9 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
 const BubbleInner = styled.div<{ popping?: boolean }>`
   transition: transform 0.4s cubic-bezier(.68,-0.55,.27,1.55);
   ${({ popping }) => popping && `
-    transform: rotate(720deg) scale(1.3) translateY(-40px);
-    opacity: 0;
+    transform: scale(1.3) translateY(-40px);
+    opacity: 0.8;
+    filter: blur(1px);
   `}
 `;
 
