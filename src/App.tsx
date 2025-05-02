@@ -4,42 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // Complete Bangla alphabet data with corresponding English sounds
 const allAlphabetData = [
-  { bangla: 'অ', sound: 'o' },
-  { bangla: 'আ', sound: 'a' },
-  { bangla: 'ই', sound: 'i' },
-  { bangla: 'ঈ', sound: 'i' },
-  { bangla: 'উ', sound: 'u' },
-  { bangla: 'ঊ', sound: 'u' },
-  { bangla: 'ঋ', sound: 'ri' },
-  { bangla: 'এ', sound: 'e' },
-  { bangla: 'ঐ', sound: 'oi' },
-  { bangla: 'ও', sound: 'o' },
-  { bangla: 'ঔ', sound: 'ou' },
-  { bangla: 'ক', sound: 'ko' },
-  { bangla: 'খ', sound: 'kho' },
-  { bangla: 'গ', sound: 'go' },
-  { bangla: 'ঘ', sound: 'gho' },
-  { bangla: 'ঙ', sound: 'ngo' },
-  { bangla: 'চ', sound: 'cho' },
-  { bangla: 'ছ', sound: 'chho' },
-  { bangla: 'জ', sound: 'jo' },
-  { bangla: 'ঝ', sound: 'jho' },
-  { bangla: 'ঞ', sound: 'nio' },
-  { bangla: 'ট', sound: 'to' },
-  { bangla: 'ঠ', sound: 'tho' },
-  { bangla: 'ড', sound: 'do' },
-  { bangla: 'ঢ', sound: 'dho' },
-  { bangla: 'ণ', sound: 'no' },
-  { bangla: 'ত', sound: 'to' },
-  { bangla: 'থ', sound: 'tho' },
-  { bangla: 'দ', sound: 'do' },
-  { bangla: 'ধ', sound: 'dho' },
-  { bangla: 'ন', sound: 'no' },
-  { bangla: 'প', sound: 'po' },
-  { bangla: 'ফ', sound: 'pho' },
-  { bangla: 'ব', sound: 'bo' },
-  { bangla: 'ভ', sound: 'bho' },
-  { bangla: 'ম', sound: 'mo' }
+  { bangla: 'অ', sound: 'o' }, { bangla: 'আ', sound: 'a' }, { bangla: 'ই', sound: 'i' }, { bangla: 'ঈ', sound: 'i' },
+  { bangla: 'উ', sound: 'u' }, { bangla: 'ঊ', sound: 'u' }, { bangla: 'ঋ', sound: 'ri' }, { bangla: 'এ', sound: 'e' },
+  { bangla: 'ঐ', sound: 'oi' }, { bangla: 'ও', sound: 'o' }, { bangla: 'ঔ', sound: 'ou' }, { bangla: 'ক', sound: 'ko' },
+  { bangla: 'খ', sound: 'kho' }, { bangla: 'গ', sound: 'go' }, { bangla: 'ঘ', sound: 'gho' }, { bangla: 'ঙ', sound: 'ngo' },
+  { bangla: 'চ', sound: 'cho' }, { bangla: 'ছ', sound: 'chho' }, { bangla: 'জ', sound: 'jo' }, { bangla: 'ঝ', sound: 'jho' },
+  { bangla: 'ঞ', sound: 'nio' }, { bangla: 'ট', sound: 'to' }, { bangla: 'ঠ', sound: 'tho' }, { bangla: 'ড', sound: 'do' },
+  { bangla: 'ঢ', sound: 'dho' }, { bangla: 'ণ', sound: 'no' }, { bangla: 'ত', sound: 'to' }, { bangla: 'থ', sound: 'tho' },
+  { bangla: 'দ', sound: 'do' }, { bangla: 'ধ', sound: 'dho' }, { bangla: 'ন', sound: 'no' }, { bangla: 'প', sound: 'po' },
+  { bangla: 'ফ', sound: 'pho' }, { bangla: 'ব', sound: 'bo' }, { bangla: 'ভ', sound: 'bho' }, { bangla: 'ম', sound: 'mo' }
 ];
 
 interface Bubble {
@@ -47,15 +20,13 @@ interface Bubble {
   type: 'bangla' | 'sound';
   content: string;
   matched: boolean;
-  position: {
-    x: number;
-    y: number;
-  };
+  position: { x: number; y: number; };
   startDelay: number;
 }
 
 const LETTERS_PER_LEVEL = 10;
 const PASSING_SCORE_PERCENTAGE = 70;
+const MAX_LEVEL = 10;
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -66,35 +37,23 @@ const App: React.FC = () => {
   const [currentLevelLetters, setCurrentLevelLetters] = useState<typeof allAlphabetData>([]);
   const [usedLetters, setUsedLetters] = useState<Set<string>>(new Set());
   const [popSound] = useState(() => new Audio('/sounds/pop.mp3'));
+  const [allMatched, setAllMatched] = useState(false);
+  const [gameComplete, setGameComplete] = useState(false);
 
   // Initialize pop sound
-  useEffect(() => {
-    popSound.preload = 'auto';
-  }, [popSound]);
+  useEffect(() => { popSound.preload = 'auto'; }, [popSound]);
 
   // Play pop sound function
   const playPopSound = useCallback(() => {
-    popSound.currentTime = 0; // Reset sound to start
+    popSound.currentTime = 0;
     popSound.play().catch(error => console.log('Error playing sound:', error));
   }, [popSound]);
 
-  // Initialize level
-  useEffect(() => {
-    console.log('Level changed, generating new level:', level);
-    generateNewLevel();
-  }, [level]);
-
-  // Debug useEffect to track bubble state
-  useEffect(() => {
-    console.log('Bubbles state updated:', bubbles);
-  }, [bubbles]);
-
-  const generateNewLevel = () => {
+  // Generate new level
+  const generateNewLevel = useCallback(() => {
     // Filter out already used letters when possible
     const availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
-    
     let selectedLetters;
-    // If we don't have enough unused letters, reset the used letters
     if (availableLetters.length < LETTERS_PER_LEVEL) {
       setUsedLetters(new Set());
       const letters = [...allAlphabetData];
@@ -102,52 +61,53 @@ const App: React.FC = () => {
       selectedLetters = letters.slice(0, LETTERS_PER_LEVEL);
       setCurrentLevelLetters(selectedLetters);
     } else {
-      // Get random unused letters
       shuffleArray(availableLetters);
       selectedLetters = availableLetters.slice(0, LETTERS_PER_LEVEL);
       setCurrentLevelLetters(selectedLetters);
-      
-      // Add selected letters to used set
       const newUsedLetters = new Set(usedLetters);
       selectedLetters.forEach(letter => newUsedLetters.add(letter.bangla));
       setUsedLetters(newUsedLetters);
     }
-
-    // Generate bubbles immediately with the selected letters
+    // Generate bubbles
     const initialBubbles: Bubble[] = [];
     selectedLetters.forEach((item, index) => {
       const baseDelay = index * 2;
-      
-      // Create Bangla bubble
       initialBubbles.push({
         id: index * 2,
         type: 'bangla',
         content: item.bangla,
         matched: false,
-        position: {
-          x: 100 + (Math.random() * (window.innerWidth - 300)), // Keep away from edges
-          y: window.innerHeight,
-        },
+        position: { x: 100 + (Math.random() * (window.innerWidth - 300)), y: window.innerHeight },
         startDelay: baseDelay,
       });
-
-      // Create sound bubble
       initialBubbles.push({
         id: index * 2 + 1,
         type: 'sound',
         content: item.sound,
         matched: false,
-        position: {
-          x: 100 + (Math.random() * (window.innerWidth - 300)), // Keep away from edges
-          y: window.innerHeight,
-        },
+        position: { x: 100 + (Math.random() * (window.innerWidth - 300)), y: window.innerHeight },
         startDelay: baseDelay + 1,
       });
     });
-
-    console.log('Generated bubbles:', initialBubbles); // Debug log
     setBubbles(initialBubbles);
-  };
+    setAllMatched(false);
+    setSelectedBubble(null);
+  }, [usedLetters]);
+
+  // On level change, generate new level
+  useEffect(() => {
+    if (level <= MAX_LEVEL) {
+      generateNewLevel();
+    }
+  }, [level, generateNewLevel]);
+
+  // Check if all bubbles are matched
+  useEffect(() => {
+    if (bubbles.length > 0 && bubbles.every(b => b.matched)) {
+      setAllMatched(true);
+      if (level === MAX_LEVEL) setGameComplete(true);
+    }
+  }, [bubbles, level]);
 
   const shuffleArray = (array: any[]) => {
     for (let i = array.length - 1; i > 0; i--) {
@@ -157,17 +117,14 @@ const App: React.FC = () => {
   };
 
   const handleBubbleClick = (bubble: Bubble) => {
-    if (bubble.matched) return;
-
+    if (bubble.matched || allMatched) return;
     if (!selectedBubble) {
       setSelectedBubble(bubble);
     } else {
-      // Check if it's a match
       const isMatch = checkMatch(selectedBubble, bubble);
       setTotalAttempts(prev => prev + 1);
-      
       if (isMatch) {
-        playPopSound(); // Play pop sound on match
+        playPopSound();
         setScore(prev => prev + 1);
         setBubbles(prev =>
           prev.map(b =>
@@ -176,23 +133,6 @@ const App: React.FC = () => {
               : b
           )
         );
-
-        // Check if all current bubbles are matched
-        const allMatched = bubbles.every(b => 
-          b.matched || b.id === bubble.id || b.id === selectedBubble.id
-        );
-
-        // If all matched, proceed to next level
-        if (allMatched) {
-          if (level < 10) {
-            setTimeout(() => {
-              setLevel(prev => prev + 1);
-            }, 1000);
-          } else {
-            // Game completed
-            alert(`Game Complete!\nFinal Score: ${((score + 1) / totalAttempts * 100).toFixed(1)}%\n${((score + 1) / totalAttempts * 100) >= PASSING_SCORE_PERCENTAGE ? 'Passed! 🎉' : 'Try again to achieve 70% or higher'}`);
-          }
-        }
       }
       setSelectedBubble(null);
     }
@@ -208,14 +148,20 @@ const App: React.FC = () => {
     return !!pair;
   };
 
-  const currentScore = totalAttempts > 0 
-    ? ((score / totalAttempts) * 100).toFixed(1) 
+  const handleNextLevel = () => {
+    if (level < MAX_LEVEL) {
+      setLevel(prev => prev + 1);
+    }
+  };
+
+  const currentScore = totalAttempts > 0
+    ? ((score / totalAttempts) * 100).toFixed(1)
     : '100';
 
   return (
     <GameContainer>
       <ScoreBoard>
-        <div>Level: {level}/10</div>
+        <div>Level: {level}/{MAX_LEVEL}</div>
         <div>Score: {score}</div>
         <div>Accuracy: {currentScore}%</div>
       </ScoreBoard>
@@ -231,7 +177,7 @@ const App: React.FC = () => {
             }}
             exit={{ y: window.innerHeight }}
             transition={{
-              y: { 
+              y: {
                 duration: bubble.matched ? 0.5 : 27,
                 ease: bubble.matched ? 'easeIn' : 'linear',
                 delay: bubble.matched ? 0 : bubble.startDelay,
@@ -245,6 +191,18 @@ const App: React.FC = () => {
           </BubbleWrapper>
         ))}
       </AnimatePresence>
+      {allMatched && !gameComplete && (
+        <NextLevelButton onClick={handleNextLevel}>
+          Next Level
+        </NextLevelButton>
+      )}
+      {gameComplete && (
+        <GameComplete>
+          <h2>Game Complete!</h2>
+          <p>Final Score: {currentScore}%</p>
+          <p>{parseFloat(currentScore) >= PASSING_SCORE_PERCENTAGE ? 'Passed! 🎉' : 'Try again to achieve 70% or higher'}</p>
+        </GameComplete>
+      )}
     </GameContainer>
   );
 };
@@ -261,77 +219,73 @@ const ScoreBoard = styled.div`
   position: fixed;
   top: 20px;
   right: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 15px 25px;
-  border-radius: 20px;
-  font-size: 24px;
-  font-weight: bold;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  z-index: 10;
+`;
+
+const GrassGround = styled.div`
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100vw;
+  height: 80px;
+  background: linear-gradient(180deg, #4CAF50 0%, #357A38 100%);
+  z-index: 1;
 `;
 
 const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boolean }>`
   position: absolute;
-  width: 70px;
-  height: 70px;
-  background: ${props => props.$isMatched 
-    ? 'linear-gradient(135deg, rgba(136, 255, 136, 0.8), rgba(136, 255, 136, 0.4))' 
-    : props.$isSelected 
-      ? 'linear-gradient(135deg, rgba(255, 255, 136, 0.8), rgba(255, 255, 136, 0.4))' 
-      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4))'};
+  width: 80px;
+  height: 80px;
+  background: ${({ $isMatched }) => ($isMatched ? '#ccc' : '#fff')};
+  border: 3px solid ${({ $isSelected }) => ($isSelected ? '#ff9800' : '#2196f3')};
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 2rem;
+  font-weight: bold;
+  color: #333;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
   cursor: pointer;
+  z-index: 2;
   user-select: none;
-  backdrop-filter: blur(2px);
-  box-shadow: 
-    inset -2px -2px 6px rgba(0, 0, 0, 0.1),
-    inset 2px 2px 6px rgba(255, 255, 255, 0.8),
-    0 4px 8px rgba(0, 0, 0, 0.1);
-  transform-style: preserve-3d;
-  perspective: 1000px;
-
-  &:hover {
-    transform: scale(1.1) translateZ(10px);
-  }
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 5%;
-    left: 15%;
-    width: 30%;
-    height: 30%;
-    background: rgba(255, 255, 255, 0.6);
-    border-radius: 50%;
-    filter: blur(2px);
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 15%;
-    right: 15%;
-    width: 20%;
-    height: 20%;
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 50%;
-    filter: blur(1px);
-  }
 `;
 
-const GrassGround = styled.div`
+const NextLevelButton = styled.button`
   position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 100px;
-  background: linear-gradient(180deg, #90EE90 0%, #228B22 100%);
-  z-index: 1;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  padding: 16px 32px;
+  font-size: 1.5rem;
+  background: #2196f3;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: background 0.2s;
+  &:hover {
+    background: #1769aa;
+  }
 `;
 
-export default App; 
+const GameComplete = styled.div`
+  position: fixed;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -30%);
+  background: #fff;
+  padding: 32px 48px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  text-align: center;
+  z-index: 30;
+`;
+
+export default App;
