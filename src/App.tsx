@@ -56,23 +56,36 @@ const App: React.FC = () => {
   // Generate bubble positions
   const generateBubblePositions = (count: number, type: 'bangla' | 'sound') => {
     const positions: { x: number; y: number }[] = [];
-    const maxAttempts = 1000;
-    let attempts = 0;
+    const maxAttempts = 2000;
     const width = window.innerWidth;
     const height = window.innerHeight - 120;
     const xMin = type === 'bangla' ? width / 2 + 40 : 40;
     const xMax = type === 'bangla' ? width - 120 : width / 2 - 120;
-    while (positions.length < count && attempts < maxAttempts) {
-      const x = xMin + Math.random() * (xMax - xMin);
-      const y = height - 100 - Math.random() * (height / 2 - 100);
-      const tooClose = positions.some(pos => {
-        const dx = pos.x - x;
-        const dy = pos.y - y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        return dist < BUBBLE_DIAM - BUBBLE_DIAM * BUBBLE_OVERLAP_THRESHOLD;
-      });
-      if (!tooClose) positions.push({ x, y });
-      attempts++;
+    for (let i = 0; i < count; i++) {
+      let placed = false;
+      let attempts = 0;
+      while (!placed && attempts < maxAttempts) {
+        const x = xMin + Math.random() * (xMax - xMin);
+        const y = height - 100 - Math.random() * (height / 2 - 100);
+        const tooClose = positions.some(pos => {
+          const dx = pos.x - x;
+          const dy = pos.y - y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          return dist < BUBBLE_DIAM; // No overlap allowed
+        });
+        if (!tooClose) {
+          positions.push({ x, y });
+          placed = true;
+        }
+        attempts++;
+      }
+      // If not placed after maxAttempts, just place it (may overlap)
+      if (!placed) {
+        positions.push({
+          x: xMin + Math.random() * (xMax - xMin),
+          y: height - 100 - Math.random() * (height / 2 - 100)
+        });
+      }
     }
     return positions;
   };
