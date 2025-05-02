@@ -30,7 +30,6 @@ const PASSING_SCORE_PERCENTAGE = 70;
 const MAX_LEVEL = 10;
 const BUBBLE_RADIUS = 40; // px
 const BUBBLE_DIAM = BUBBLE_RADIUS * 2;
-const BUBBLE_OVERLAP_THRESHOLD = 0.1; // 10%
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
