@@ -30,6 +30,7 @@ const PASSING_SCORE_PERCENTAGE = 70;
 const MAX_LEVEL = 10;
 const BUBBLE_RADIUS = 40; // px
 const BUBBLE_DIAM = BUBBLE_RADIUS * 2;
+const BUBBLE_RISE_DURATION = 27; // seconds
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -266,33 +267,18 @@ const App: React.FC = () => {
               opacity: 1,
               rotate: 0
             }}
-            animate={bubble.popping ? {
-              scale: [1, 1.2, 0.7, 0.5],
-              opacity: [1, 1, 0.7, 0],
-              y: bubble.position
-                ? [
-                    bubble.position.y,
-                    bubble.position.y - 40,
-                    bubble.position.y - 80,
-                    bubble.position.y - 120
-                  ]
-                : [0, -40, -80, -120],
-              transition: { duration: 0.4 }
-            } : {
-              y: bubble.matched
-                ? window.innerHeight
-                : (bubble.position?.y ?? 0),
+            animate={{
+              y: -100, // Move above the top of the screen
               x: bubble.position?.x ?? 0,
               scale: 1,
-              opacity: 1,
+              opacity: bubble.matched ? 0.5 : 1,
               rotate: 0
             }}
-            exit={{ y: window.innerHeight, opacity: 0 }}
             transition={{
               y: {
-                duration: bubble.matched ? 0.5 : 27,
-                ease: bubble.matched ? 'easeIn' : 'linear',
-                delay: bubble.matched ? 0 : bubble.startDelay,
+                duration: BUBBLE_RISE_DURATION,
+                ease: 'linear',
+                delay: bubble.startDelay,
               }
             }}
             onClick={() => handleBubbleClick(bubble)}
@@ -377,7 +363,7 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
   position: absolute;
   width: 80px;
   height: 80px;
-  background: ${({ $isMatched }) => ($isMatched ? '#ccc' : '#fff')};
+  background: radial-gradient(circle at 60% 40%, #fff 60%, rgba(33,150,243,0.15) 100%);
   border: 3px solid ${({ $isSelected }) => ($isSelected ? '#ff9800' : '#2196f3')};
   border-radius: 50%;
   display: flex;
@@ -390,6 +376,7 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
   cursor: pointer;
   z-index: 2;
   user-select: none;
+  opacity: ${({ $isMatched }) => ($isMatched ? 0.5 : 1)};
 `;
 
 const BubbleInner = styled.div<{ popping?: boolean }>`
