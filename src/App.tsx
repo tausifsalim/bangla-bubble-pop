@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 // Complete Bangla alphabet data with corresponding English sounds
 const allAlphabetData = [
@@ -20,35 +20,83 @@ interface Bubble {
   type: 'bangla' | 'sound';
   content: string;
   matched: boolean;
-  missed: boolean;
   position: { x: number; y: number; };
   startDelay: number;
-  popping?: boolean;
-  falling?: boolean;
 }
 
 const LETTERS_PER_LEVEL = 10;
 const PASSING_SCORE_PERCENTAGE = 70;
-const MAX_LEVEL = 10;
-const BUBBLE_RADIUS = 40; // px
-const BUBBLE_DIAM = BUBBLE_RADIUS * 2;
-const BUBBLE_RISE_DURATION = 15; // seconds for bubble to rise
 
 const App: React.FC = () => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [score, setScore] = useState(0);
-  const [missed, setMissed] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [selectedBubble, setSelectedBubble] = useState<Bubble | null>(null);
   const [level, setLevel] = useState(1);
   const [currentLevelLetters, setCurrentLevelLetters] = useState<typeof allAlphabetData>([]);
   const [usedLetters, setUsedLetters] = useState<Set<string>>(new Set());
-  const [showLevelEnd, setShowLevelEnd] = useState(false);
-  const [allMatched, setAllMatched] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
-  const popSound = useRef<HTMLAudioElement | null>(null);
+  const [popSound] = useState(() => new Audio('/sounds/pop.mp3'));
 
-  // Helper to shuffle an array
+  // Initialize pop sound
+  useEffect(() => {
+    popSound.preload = 'auto';
+  }, [popSound]);
+
+  // Play pop sound function
+  const playPopSound = useCallback(() => {
+    popSound.currentTime = 0;
+    popSound.play().catch(error => console.log('Error playing sound:', error));
+  }, [popSound]);
+
+  // Initialize level
+  useEffect(() => {
+    generateNewLevel();
+    // eslint-disable-next-line
+  }, [level]);
+
+  const generateNewLevel = () => {
+    // Filter out already used letters when possible
+    const availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
+    let selectedLetters;
+    if (availableLetters.length < LETTERS_PER_LEVEL) {
+      setUsedLetters(new Set());
+      const letters = [...allAlphabetData];
+      shuffleArray(letters);
+      selectedLetters = letters.slice(0, LETTERS_PER_LEVEL);
+      setCurrentLevelLetters(selectedLetters);
+    } else {
+      shuffleArray(availableLetters);
+      selectedLetters = availableLetters.slice(0, LETTERS_PER_LEVEL);
+      setCurrentLevelLetters(selectedLetters);
+      const newUsedLetters = new Set(usedLetters);
+      selectedLetters.forEach(letter => newUsedLetters.add(letter.bangla));
+      setUsedLetters(newUsedLetters);
+    }
+    // Generate bubbles immediately with the selected letters
+    const initialBubbles: Bubble[] = [];
+    selectedLetters.forEach((item, index) => {
+      const baseDelay = index * 2;
+      initialBubbles.push({
+        id: index * 2,
+        type: 'bangla',
+        content: item.bangla,
+        matched: false,
+        position: { x: 100 + (Math.random() * (window.innerWidth - 300)), y: window.innerHeight },
+        startDelay: baseDelay,
+      });
+      initialBubbles.push({
+        id: index * 2 + 1,
+        type: 'sound',
+        content: item.sound,
+        matched: false,
+        position: { x: 100 + (Math.random() * (window.innerWidth - 300)), y: window.innerHeight },
+        startDelay: baseDelay + 1,
+      });
+    });
+    setBubbles(initialBubbles);
+    setSelectedBubble(null);
+  };
+
   const shuffleArray = (array: any[]) => {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -56,152 +104,41 @@ const App: React.FC = () => {
     }
   };
 
-  // Generate bubble positions with no overlap
-  const generateBubblePositions = (count: number) => {
-    const positions: { x: number; y: number }[] = [];
-    const maxAttempts = 2000;
-    const width = window.innerWidth;
-    const height = window.innerHeight - 120;
-    for (let i = 0; i < count; i++) {
-      let placed = false;
-      let attempts = 0;
-      while (!placed && attempts < maxAttempts) {
-        const x = 40 + Math.random() * (width - 120);
-        const y = height - 100 - Math.random() * (height / 2 - 100);
-        const tooClose = positions.some(pos => {
-          const dx = pos.x - x;
-          const dy = pos.y - y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          return dist < BUBBLE_DIAM;
-        });
-        if (!tooClose) {
-          positions.push({ x, y });
-          placed = true;
-        }
-        attempts++;
-      }
-      if (!placed) {
-        positions.push({
-          x: 40 + Math.random() * (width - 120),
-          y: height - 100 - Math.random() * (height / 2 - 100)
-        });
-      }
-    }
-    return positions;
-  };
-
-  // Generate a new level
-  const generateNewLevel = useCallback((resetUsedLetters = false) => {
-    let availableLetters = allAlphabetData.filter(letter => !usedLetters.has(letter.bangla));
-    let selectedLetters;
-    let newUsedLetters = new Set(usedLetters);
-
-    if (availableLetters.length < LETTERS_PER_LEVEL || resetUsedLetters) {
-      newUsedLetters = new Set();
-      const letters = [...allAlphabetData];
-      shuffleArray(letters);
-      selectedLetters = letters.slice(0, LETTERS_PER_LEVEL);
-    } else {
-      shuffleArray(availableLetters);
-      selectedLetters = availableLetters.slice(0, LETTERS_PER_LEVEL);
-      selectedLetters.forEach(letter => newUsedLetters.add(letter.bangla));
-    }
-
-    setCurrentLevelLetters(selectedLetters);
-
-    // Generate bubble positions and randomize order
-    const positions = generateBubblePositions(LETTERS_PER_LEVEL * 2);
-    const bubbleData: Bubble[] = [];
-    selectedLetters.forEach((item, index) => {
-      bubbleData.push({
-        id: index * 2,
-        type: 'bangla',
-        content: item.bangla,
-        matched: false,
-        missed: false,
-        position: positions[index * 2],
-        startDelay: Math.random() * 2,
-      });
-      bubbleData.push({
-        id: index * 2 + 1,
-        type: 'sound',
-        content: item.sound,
-        matched: false,
-        missed: false,
-        position: positions[index * 2 + 1],
-        startDelay: Math.random() * 2,
-      });
-    });
-    shuffleArray(bubbleData);
-    setBubbles(bubbleData);
-    setSelectedBubble(null);
-    setScore(0);
-    setMissed(0);
-    setTotalAttempts(0);
-    setAllMatched(false);
-    setShowLevelEnd(false);
-    setUsedLetters(newUsedLetters);
-  }, [usedLetters]);
-
-  // Start game
-  const handleStartGame = useCallback(() => {
-    setGameStarted(true);
-    setLevel(1);
-    generateNewLevel(true);
-  }, [generateNewLevel]);
-
-  useEffect(() => {
-    popSound.current = new Audio('/sounds/pop.mp3');
-    if (popSound.current) {
-      popSound.current.preload = 'auto';
-    }
-  }, []);
-
-  // Play pop sound and haptic feedback
-  const playPopSoundAndHaptic = useCallback(() => {
-    if (popSound.current) {
-      popSound.current.currentTime = 0;
-      popSound.current.play().catch(error => console.log('Error playing sound:', error));
-    }
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
-    }
-  }, []);
-
-  // Handle bubble click for matching
   const handleBubbleClick = (bubble: Bubble) => {
-    if (bubble.matched || bubble.missed || allMatched) return;
+    if (bubble.matched) return;
     if (!selectedBubble) {
       setSelectedBubble(bubble);
     } else {
       const isMatch = checkMatch(selectedBubble, bubble);
       setTotalAttempts(prev => prev + 1);
       if (isMatch) {
-        playPopSoundAndHaptic();
-        // Set popping state for animation
+        playPopSound();
+        setScore(prev => prev + 1);
         setBubbles(prev =>
           prev.map(b =>
             b.id === bubble.id || b.id === selectedBubble.id
-              ? { ...b, popping: true }
+              ? { ...b, matched: true }
               : b
           )
         );
+        // Check if all current bubbles are matched
         setTimeout(() => {
-          setScore(prev => prev + 1);
-          setBubbles(prev =>
-            prev.map(b =>
-              b.id === bubble.id || b.id === selectedBubble.id
-                ? { ...b, matched: true, popping: false, falling: true }
-                : b
-            )
+          const allMatched = bubbles.every(b =>
+            b.matched || b.id === bubble.id || b.id === selectedBubble.id
           );
-        }, 400); // Animation duration
+          if (allMatched) {
+            if (level < 10) {
+              setLevel(prev => prev + 1);
+            } else {
+              alert(`Game Complete!\nFinal Score: ${((score + 1) / totalAttempts * 100).toFixed(1)}%\n${((score + 1) / totalAttempts * 100) >= PASSING_SCORE_PERCENTAGE ? 'Passed! 🎉' : 'Try again to achieve 70% or higher'}`);
+            }
+          }
+        }, 500);
       }
       setSelectedBubble(null);
     }
   };
 
-  // Check if two bubbles are a match
   const checkMatch = (bubble1: Bubble, bubble2: Bubble) => {
     if (bubble1.type === bubble2.type) return false;
     const pair = currentLevelLetters.find(
@@ -212,195 +149,46 @@ const App: React.FC = () => {
     return !!pair;
   };
 
-  // Only generate a new level when level or gameStarted changes
-  useEffect(() => {
-    if (level <= MAX_LEVEL && gameStarted) {
-      generateNewLevel();
-    }
-  }, [level, gameStarted, generateNewLevel]);
-
-  // When all bubbles are matched or missed, show level end
-  useEffect(() => {
-    if (
-      bubbles.length > 0 &&
-      bubbles.every(b => b.matched || b.missed)
-    ) {
-      setAllMatched(true);
-      setTimeout(() => setShowLevelEnd(true), 700);
-    }
-  }, [bubbles]);
-
-  // Handle bubbles rising and missing
-  const handleBubbleRiseComplete = (bubbleId: number) => {
-    setBubbles(prev =>
-      prev.map(b =>
-        b.id === bubbleId && !b.matched
-          ? { ...b, missed: true }
-          : b
-      )
-    );
-    setMissed(prev => prev + 1);
-    setTotalAttempts(prev => prev + 1);
-  };
-
-  // Handle falling animation complete (optional: remove bubble)
-  const handleBubbleFallComplete = (bubbleId: number) => {
-    setBubbles(prev =>
-      prev.map(b =>
-        b.id === bubbleId
-          ? { ...b, falling: false }
-          : b
-      )
-    );
-  };
-
-  const handleNextLevel = () => {
-    setLevel(prev => prev + 1);
-  };
-
-  const handleTryAgain = () => {
-    generateNewLevel();
-  };
-
   const currentScore = totalAttempts > 0
     ? ((score / totalAttempts) * 100).toFixed(1)
     : '100';
 
-  // --- 1. Start Screen ---
-  if (!gameStarted) {
-    return (
-      <StartScreen>
-        <StartButton onClick={handleStartGame}>
-          Start Game
-        </StartButton>
-      </StartScreen>
-    );
-  }
-
   return (
     <GameContainer>
       <ScoreBoard>
-        <div>Level: {level}/{MAX_LEVEL}</div>
+        <div>Level: {level}/10</div>
         <div>Score: {score}</div>
-        <div>Missed: {missed}</div>
         <div>Accuracy: {currentScore}%</div>
       </ScoreBoard>
       <GrassGround />
       <AnimatePresence>
-        {bubbles.map(bubble => {
-          // Rising animation for unmatched/unmissed bubbles
-          if (!bubble.matched && !bubble.missed) {
-            return (
-              <BubbleWrapper
-                key={bubble.id}
-                initial={{
-                  y: window.innerHeight,
-                  x: bubble.position?.x ?? 0,
-                  scale: 1,
-                  opacity: 1,
-                  rotate: 0
-                }}
-                animate={{
-                  y: -100,
-                  x: bubble.position?.x ?? 0,
-                  scale: 1,
-                  opacity: 1,
-                  rotate: 0
-                }}
-                transition={{
-                  y: {
-                    duration: BUBBLE_RISE_DURATION,
-                    ease: 'linear',
-                    delay: bubble.startDelay,
-                  }
-                }}
-                onAnimationComplete={() => handleBubbleRiseComplete(bubble.id)}
-                onClick={() => handleBubbleClick(bubble)}
-                $isSelected={selectedBubble?.id === bubble.id}
-                $isMatched={bubble.matched}
-              >
-                <BubbleInner>
-                  {bubble.content}
-                </BubbleInner>
-              </BubbleWrapper>
-            );
-          }
-          // Pop and fall animation for matched bubbles
-          if (bubble.matched && bubble.falling) {
-            return (
-              <BubbleWrapper
-                key={bubble.id}
-                initial={{
-                  y: bubble.position?.y ?? 0,
-                  x: bubble.position?.x ?? 0,
-                  scale: 1.2,
-                  opacity: 1,
-                  rotate: 0
-                }}
-                animate={{
-                  y: window.innerHeight - 120,
-                  x: bubble.position?.x ?? 0,
-                  scale: 1,
-                  opacity: 1,
-                  rotate: 0
-                }}
-                transition={{
-                  y: { duration: 1, ease: 'easeIn' }
-                }}
-                onAnimationComplete={() => handleBubbleFallComplete(bubble.id)}
-                $isSelected={false}
-                $isMatched={true}
-              >
-                <BubbleInner popping>
-                  {bubble.content}
-                </BubbleInner>
-              </BubbleWrapper>
-            );
-          }
-          // Hide missed or already fallen bubbles
-          return null;
-        })}
+        {bubbles.map(bubble => (
+          <BubbleWrapper
+            key={bubble.id}
+            initial={{ y: window.innerHeight }}
+            animate={{
+              y: bubble.matched ? window.innerHeight : -100,
+              x: bubble.position.x
+            }}
+            exit={{ y: window.innerHeight }}
+            transition={{
+              y: {
+                duration: bubble.matched ? 0.5 : 27,
+                ease: bubble.matched ? 'easeIn' : 'linear',
+                delay: bubble.matched ? 0 : bubble.startDelay,
+              }
+            }}
+            onClick={() => handleBubbleClick(bubble)}
+            $isSelected={selectedBubble?.id === bubble.id}
+            $isMatched={bubble.matched}
+          >
+            {bubble.content}
+          </BubbleWrapper>
+        ))}
       </AnimatePresence>
-      {showLevelEnd && (
-        <LevelEndOverlay>
-          {parseFloat(currentScore) >= PASSING_SCORE_PERCENTAGE ? (
-            <NextLevelButton onClick={handleNextLevel}>Next Level</NextLevelButton>
-          ) : (
-            <TryAgainButton onClick={handleTryAgain}>Try Again</TryAgainButton>
-          )}
-        </LevelEndOverlay>
-      )}
     </GameContainer>
   );
 };
-
-// --- Styled Components ---
-
-const StartScreen = styled.div`
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
-`;
-
-const StartButton = styled.button`
-  font-size: 2rem;
-  padding: 32px 64px;
-  border-radius: 32px;
-  background: linear-gradient(145deg, #87CEEB 0%, #E0F6FF 100%);
-  color: #fff;
-  border: none;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-  cursor: pointer;
-  font-weight: bold;
-  outline: none;
-  transition: background 0.2s;
-  &:hover {
-    background: linear-gradient(145deg, #E0F6FF 0%, #87CEEB 100%);
-  }
-`;
 
 const GameContainer = styled.div`
   width: 100vw;
@@ -435,7 +223,7 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
   position: absolute;
   width: 80px;
   height: 80px;
-  background: radial-gradient(circle at 60% 40%, #fff 60%, rgba(33,150,243,0.15) 100%);
+  background: ${({ $isMatched }) => ($isMatched ? '#ccc' : '#fff')};
   border: 3px solid ${({ $isSelected }) => ($isSelected ? '#ff9800' : '#2196f3')};
   border-radius: 50%;
   display: flex;
@@ -448,52 +236,6 @@ const BubbleWrapper = styled(motion.div)<{ $isSelected: boolean; $isMatched: boo
   cursor: pointer;
   z-index: 2;
   user-select: none;
-  opacity: ${({ $isMatched }) => ($isMatched ? 0.5 : 1)};
-`;
-
-const BubbleInner = styled.div<{ popping?: boolean }>`
-  transition: transform 0.4s cubic-bezier(.68,-0.55,.27,1.55);
-  ${({ popping }) => popping && `
-    transform: scale(1.3) translateY(-40px);
-    opacity: 0.8;
-    filter: blur(1px);
-  `}
-`;
-
-const LevelEndOverlay = styled.div`
-  position: fixed;
-  left: 50%;
-  top: 40%;
-  transform: translate(-50%, -40%);
-  background: #fff;
-  padding: 32px 48px;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-  text-align: center;
-  z-index: 30;
-`;
-
-const NextLevelButton = styled.button`
-  padding: 16px 32px;
-  font-size: 1.5rem;
-  background: #2196f3;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  margin: 0 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  transition: background 0.2s;
-  &:hover {
-    background: #1769aa;
-  }
-`;
-
-const TryAgainButton = styled(NextLevelButton)`
-  background: #f44336;
-  &:hover {
-    background: #b71c1c;
-  }
 `;
 
 export default App;
